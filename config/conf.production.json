@@ -1,0 +1,8 @@
+{
+  "logFile":   "comodoca-prod",
+  "logPath":   "/logs",
+  "maxSize":    500,
+  "maxBackups": 5,
+  "maxAge":     90,
+  "rollOver":  "24h"
+}
