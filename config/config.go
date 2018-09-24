@@ -19,7 +19,6 @@ type Configuration struct {
 var Config Configuration
 
 func (r *Configuration) Load(filename string) {
-	//con := Configuration{}
 
 	file, _ := os.Open(filename)
 

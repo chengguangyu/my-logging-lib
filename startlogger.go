@@ -1,4 +1,4 @@
-package main
+package Logger
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -26,16 +27,7 @@ type LogMessage struct {
 	Data  string
 }
 
-var rabbitCh *amqp.Channel
-
 var printer chan string
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		logger.Fatalf("%s: %s", msg, err)
-		panic(fmt.Sprintf("%s: %s", msg, err))
-	}
-}
 
 func PrintMsg(log LogMessage) {
 	var buffer bytes.Buffer
@@ -76,34 +68,31 @@ func PrintMsg(log LogMessage) {
 
 	var host string
 
-	// TODO: This could be done on the clients.
 	log.Host = strings.ToLower(log.Host)
 
 	switch {
-	case strings.HasPrefix(log.Host, "hworker-q"):
-		host = "que"
-	case strings.HasPrefix(log.Host, "hworker-t"):
-		host = "trg"
-	case strings.HasPrefix(log.Host, "hserver"):
-		host = "srv"
-	case strings.HasPrefix(log.Host, "streams"):
-		host = "str"
-	case strings.HasPrefix(log.Host, "fraudserver"):
-		host = "frd"
-	case strings.HasPrefix(log.Host, "gatekeeper"):
-		host = "gkp"
-	case strings.HasPrefix(log.Host, "socket-server"):
-		host = "soc"
-	case strings.HasPrefix(log.Host, "push-server"):
-		host = "pus"
-	case strings.HasPrefix(log.Host, "hushed-backoffice-server"):
-		host = "sup"
-	case strings.HasPrefix(log.Host, "maelstrom-collector_test"):
-		host = "mae"
-	case strings.HasPrefix(log.Host, "maelstrom-uploader"):
-		host = "mau"
-	case strings.HasPrefix(log.Host, "hushed-store"):
-		host = "sto"
+	case strings.HasSuffix(log.Host, "api-services"):
+		host = "api"
+	case strings.HasSuffix(log.Host, "common"):
+		host = "com"
+	case strings.HasSuffix(log.Host, "registration-service"):
+		host = "reg"
+	case strings.HasSuffix(log.Host, "web-app"):
+		host = "app"
+	case strings.HasSuffix(log.Host, "web-ng"):
+		host = "wng"
+	case strings.HasSuffix(log.Host, "cert-service"):
+		host = "cer"
+	case strings.HasSuffix(log.Host, "download-service"):
+		host = "dow"
+	case strings.HasSuffix(log.Host, "scheduler-service"):
+		host = "sch"
+	case strings.HasSuffix(log.Host, "certinfo-service"):
+		host = "cei"
+	case strings.HasSuffix(log.Host, "notification-service"):
+		host = "not"
+	case strings.HasSuffix(log.Host, "signer-services"):
+		host = "sig"
 	default:
 		host = fmt.Sprintf("%-30s", log.Host)
 	}
@@ -113,21 +102,7 @@ func PrintMsg(log LogMessage) {
 	if len(host) == 3 && len(splitHost) > 0 {
 		host = host + "|" + splitHost[len(splitHost)-1] //Take the last item since it will be the containerID
 	}
-
-	// TODO Proper colorization. But it should be based on log level not host.
-	//if host[0] == 'h' {
-	//	colorPrint = color.New(color.FgMagenta)
-	//	colorPrint.Add(color.Faint)
-	//	g := colorPrint.SprintfFunc()
-	//	buffer.WriteString(g(host))
-	//} else if host[0] == 's' {
-	//	colorPrint = color.New(color.FgCyan)
-	//	colorPrint.Add(color.Faint)
-	//	g := colorPrint.SprintfFunc()
-	//	buffer.WriteString(g(host))
-	//} else {
 	buffer.WriteString(host)
-	//}
 
 	buffer.WriteString("|")
 
@@ -138,9 +113,9 @@ func PrintMsg(log LogMessage) {
 	}
 
 	// TODO: I don't think we need to log this.
-	// tm := strconv.FormatInt(log.Ts, 10)
-	// buffer.WriteString("|")
-	// buffer.WriteString(tm)
+	tm := strconv.FormatInt(log.Ts, 10)
+	buffer.WriteString("|")
+	buffer.WriteString(tm)
 
 	buffer.WriteString("|")
 
@@ -216,36 +191,23 @@ func createPrinter() {
 	}()
 }
 
-func RabbitMQConnect() {
-	var url string
-	var err error
+func InitializeRabbit(Log Logger) {
 
-	url = Config.RabbitMQUrl
-
-	if url == "" {
-		panic("No connection url set")
-	}
-
-	fmt.Println("Connecting to " + url)
-
-	conn, err := amqp.Dial(url)
-	failOnError(err, "Failed to connect to RabbitMQ")
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
-	defer conn.Close()
-	//TODO: Setup callbacks to be notified on disconnects, reconnects and connection closed.
+	Log.Connect(config.Config.RabbitMQUrl, "helloworld", true)
+	Log.CreateQueue(Log.rabbitCh)
 
 }
 
-func main() {
+func StartLoggerServer() {
+	var Log Logger
+	InitializeRabbit(Log)
 	config.Config.Load("conf.json")
 
 	createPrinter()
 
 	// create lumberjack logger  https://github.com/natefinch/lumberjack
 	l := &lumberjack.Logger{
-		Filename:   config.Config.LogPath + "/hushed.log",
+		Filename:   config.Config.LogPath + "/comodo.log",
 		MaxSize:    config.Config.MaxSize, // megabytes
 		MaxBackups: config.Config.MaxBackups,
 		MaxAge:     config.Config.MaxAge, //days
@@ -272,8 +234,6 @@ func main() {
 		l.Rotate()
 	})
 	cr.Start()
-
-	RabbitMQConnect()
 
 	runtime.Goexit()
 }
