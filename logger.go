@@ -1,4 +1,4 @@
-package Logger
+package ComodoLogger
 
 import (
 	"bytes"
@@ -18,12 +18,12 @@ const ERROR = "err"
 const FYI = "fyi"
 const PANIC = "panic"
 
-type msg struct {
-	Level string `json:"level"`
-	Host  string `json:"host"`
-	Id    string `json:"id"`
-	Msg   string `json:"msg"`
-	Ts    int64  `json:"ts"`
+type LogMessage struct {
+	Id    string
+	Host  string
+	Msg   interface{}
+	Ts    int64
+	Level string
 }
 
 var hostname, _ = os.Hostname()
@@ -90,13 +90,14 @@ func (logger *Logger) CreateQueue(ch *amqp.Channel) amqp.Queue {
 		nil,    // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
+	fmt.Print("logger started")
 	return q
 }
 
 func (logger *Logger) publishLog(text string, level string) {
 	now := time.Now()
 	var milli = now.UnixNano() / 1000000
-	message := msg{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli}
+	message := LogMessage{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli}
 	b, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("error:", err)
@@ -116,7 +117,7 @@ func (logger *Logger) publishLog(text string, level string) {
 func (logger *Logger) publishLogId(text string, level string, id string) {
 	now := time.Now()
 	var milli = now.UnixNano() / 1000000
-	message := msg{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli, Id: id}
+	message := LogMessage{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli, Id: id}
 	b, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("error:", err)

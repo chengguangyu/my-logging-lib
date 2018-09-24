@@ -1,4 +1,4 @@
-package Logger
+package ComodoLogger
 
 import (
 	"bytes"
@@ -17,15 +17,6 @@ import (
 	"strings"
 	"syscall"
 )
-
-type LogMessage struct {
-	Id    string
-	Host  string
-	Msg   interface{}
-	Ts    int64
-	Level string
-	Data  string
-}
 
 var printer chan string
 
@@ -73,8 +64,6 @@ func PrintMsg(log LogMessage) {
 	switch {
 	case strings.HasSuffix(log.Host, "api-services"):
 		host = "api"
-	case strings.HasSuffix(log.Host, "common"):
-		host = "com"
 	case strings.HasSuffix(log.Host, "registration-service"):
 		host = "reg"
 	case strings.HasSuffix(log.Host, "web-app"):
@@ -136,11 +125,11 @@ func PrintMsg(log LogMessage) {
 		}
 
 		switch {
-		case log.Level == "dmp":
+		case log.Level == "api":
 			colorPrint = color.New(color.FgHiCyan)
 			g := colorPrint.SprintfFunc()
 			buffer.WriteString(g(message.String()))
-		case log.Level == "dbg":
+		case log.Level == "cer":
 			colorPrint = color.New(color.FgHiBlue)
 			g := colorPrint.SprintfFunc()
 			buffer.WriteString(g(message.String()))
@@ -191,18 +180,17 @@ func createPrinter() {
 	}()
 }
 
-func InitializeRabbit(Log Logger) {
+func InitializeRabbit(Log Logger, serverName string) {
 
-	Log.Connect(config.Config.RabbitMQUrl, "helloworld", true)
+	Log.Connect(config.Config.RabbitMQUrl, serverName, true)
 	Log.CreateQueue(Log.rabbitCh)
 
 }
 
-func StartLoggerServer() {
-	var Log Logger
-	InitializeRabbit(Log)
+func StartLoggerServer(serverName string) {
+	var LogServer Logger
+	InitializeRabbit(LogServer, serverName)
 	config.Config.Load("conf.json")
-
 	createPrinter()
 
 	// create lumberjack logger  https://github.com/natefinch/lumberjack
