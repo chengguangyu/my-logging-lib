@@ -1,4 +1,4 @@
-package ComodoLogger
+package startlogger
 
 import (
 	"bytes"
