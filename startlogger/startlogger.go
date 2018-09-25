@@ -180,17 +180,11 @@ func createPrinter() {
 	}()
 }
 
-func InitializeRabbit(Log Logger, serverName string) {
-
-	Log.Connect(config.Config.RabbitMQUrl, serverName, true)
-	Log.CreateQueue(Log.rabbitCh)
-
-}
-
-func StartLoggerServer(serverName string) {
-	var LogServer Logger
-	InitializeRabbit(LogServer, serverName)
+func StartLogServer(serverName string) {
+	LogServer := Logger{}
 	config.Config.Load("conf.json")
+	LogServer.Connect(config.Config.RabbitMQUrl, serverName, true)
+	LogServer.CreateQueue(LogServer.GetLoggerChannel())
 	createPrinter()
 
 	// create lumberjack logger  https://github.com/natefinch/lumberjack

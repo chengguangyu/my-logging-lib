@@ -80,6 +80,10 @@ func (logger *Logger) Connect(RabbitMQUrl string, serverName string, fatal bool)
 	logger.rabbitCh = ch
 }
 
+func (logger *Logger) GetLoggerChannel() *amqp.Channel {
+	return logger.rabbitCh
+}
+
 func (logger *Logger) CreateQueue(ch *amqp.Channel) amqp.Queue {
 	q, err := ch.QueueDeclare(
 		"logs", // name
