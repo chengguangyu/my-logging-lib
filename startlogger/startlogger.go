@@ -3,7 +3,7 @@ package startlogger
 import (
 	"bytes"
 	"fmt"
-	"github.com/comodo/comodo-logging-lib/config"
+	"github.com/comodo/comodoca-logging-lib/config"
 	"github.com/fatih/color"
 	"github.com/robfig/cron"
 	"gopkg.in/natefinch/lumberjack.v2"
