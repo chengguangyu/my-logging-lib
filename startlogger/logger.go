@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/streadway/amqp"
 	"log"
-	"os"
 	"runtime"
 	"time"
 )
@@ -26,12 +25,17 @@ type LogMessage struct {
 	Level string
 }
 
-var hostname, _ = os.Hostname()
 var server string
+var host string
+var logChannel *amqp.Channel
 
 type LoggerInterface interface {
-	Connect(nats_url string, serverName string, fatal bool)
-	CreateQueue(ch *amqp.Channel, qName string) amqp.Queue
+	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
+	CreateQueue(ch *amqp.Channel) bool
+	GetLoggerChannel() *amqp.Channel
+	GetLoggerQueue() amqp.Queue
+	ShutDown()
+	ParseLog(ch *amqp.Channel, qName string)
 	PrintLocally(printLocal bool)
 	Warn(v ...interface{})
 	Warnf(format string, v ...interface{})
@@ -47,6 +51,8 @@ type LoggerInterface interface {
 	PrintfLevel(level string, format string, v ...interface{})
 	Panic(v ...interface{})
 	Panicf(format string, v ...interface{})
+	publishLog(text string, level string)
+	publishLogId(text string, level string, id string)
 }
 
 func failOnError(err error, msg string) {
@@ -59,6 +65,8 @@ func failOnError(err error, msg string) {
 type Logger struct {
 	LoggerInterface
 	rabbitCh     *amqp.Channel
+	rabbitConn   *amqp.Connection
+	rabbitQueue  amqp.Queue
 	printLocally bool
 }
 
@@ -66,25 +74,37 @@ func (logger *Logger) PrintLocally(printLocal bool) {
 	logger.printLocally = printLocal
 }
 
-func (logger *Logger) Connect(RabbitMQUrl string, serverName string, fatal bool) {
+func (logger *Logger) Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool) {
 	conn, err := amqp.Dial(RabbitMQUrl)
 
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
+	logger.rabbitConn = conn
 
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
 
-	server = serverName
 	logger.rabbitCh = ch
+	logChannel = ch
+	server = serverName
+	host = hostName
+}
+
+func (logger *Logger) ShutDown() {
+	logger.rabbitConn.Close()
+	logger.rabbitCh.Close()
+	fmt.Println("logger closed")
 }
 
 func (logger *Logger) GetLoggerChannel() *amqp.Channel {
 	return logger.rabbitCh
 }
 
-func (logger *Logger) CreateQueue(ch *amqp.Channel) amqp.Queue {
+func (logger *Logger) GetLoggerQueue() amqp.Queue {
+	return logger.rabbitQueue
+}
+
+func (logger *Logger) CreateQueue(ch *amqp.Channel) bool {
+
 	q, err := ch.QueueDeclare(
 		"logs", // name
 		false,  // durable
@@ -95,18 +115,21 @@ func (logger *Logger) CreateQueue(ch *amqp.Channel) amqp.Queue {
 	)
 	failOnError(err, "Failed to declare a queue")
 	fmt.Print("logger started")
-	return q
+	logger.rabbitQueue = q
+	return true
 }
 
 func (logger *Logger) publishLog(text string, level string) {
 	now := time.Now()
 	var milli = now.UnixNano() / 1000000
-	message := LogMessage{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli}
+	message := LogMessage{Level: level, Host: server + "-" + host, Msg: text, Ts: milli}
+
 	b, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	err = logger.rabbitCh.Publish(
+
+	err = logChannel.Publish(
 		"",     // exchange
 		"logs", // routing key
 		false,  // mandatory
@@ -118,15 +141,43 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
+func (logger *Logger) ParseLog(ch *amqp.Channel, qName string) {
+
+	msgs, err := ch.Consume(
+		qName,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	forever := make(chan bool)
+
+	go func() {
+		for msg := range msgs {
+			logMsg := LogMessage{}
+			if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
+				fmt.Printf("Cannot parse the log message: %s\n", err)
+				return
+			}
+			PrintMsg(logMsg)
+		}
+	}()
+	<-forever
+}
+
 func (logger *Logger) publishLogId(text string, level string, id string) {
 	now := time.Now()
 	var milli = now.UnixNano() / 1000000
-	message := LogMessage{Level: level, Host: server + "-" + hostname, Msg: text, Ts: milli, Id: id}
+	message := LogMessage{Level: level, Host: server + "-" + host, Msg: text, Ts: milli, Id: id}
 	b, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	err = logger.rabbitCh.Publish(
+	err = logChannel.Publish(
 		"",     // exchange
 		"logs", // routing key
 		false,  // mandatory
@@ -141,7 +192,7 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 func printLog(text string, level string) {
 	now := time.Now()
 	var milli = now.UnixNano() / 1000000
-	formattedText := fmt.Sprintf("[%s] %d - %s", hostname, milli, text)
+	formattedText := fmt.Sprintf("[%s] %d - %s", host, milli, text)
 
 	switch level {
 	case GOOD:

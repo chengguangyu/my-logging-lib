@@ -2,12 +2,10 @@ package startlogger
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/comodo/comodo-logging-lib/config"
 	"github.com/fatih/color"
 	"github.com/robfig/cron"
-	"github.com/streadway/amqp"
 	"gopkg.in/natefinch/lumberjack.v2"
 	logger "log"
 	"os"
@@ -158,18 +156,6 @@ func PrintMsg(log LogMessage) {
 	logger.Println(buffer.String())
 }
 
-func ParseMsg(m *amqp.Publishing) {
-	message := m.Body
-	log := LogMessage{}
-
-	if err := json.Unmarshal(message, &log); err != nil {
-		fmt.Printf("ERROR PANIC: %s\n", err)
-		return
-	}
-
-	PrintMsg(log)
-}
-
 func createPrinter() {
 	printer = make(chan string, 1)
 	go func() {
@@ -180,11 +166,8 @@ func createPrinter() {
 	}()
 }
 
-func StartLogServer(serverName string) {
-	LogServer := Logger{}
-	config.Config.Load("conf.json")
-	LogServer.Connect(config.Config.RabbitMQUrl, serverName, true)
-	LogServer.CreateQueue(LogServer.GetLoggerChannel())
+func WriteLog() {
+
 	createPrinter()
 
 	// create lumberjack logger  https://github.com/natefinch/lumberjack
@@ -218,4 +201,15 @@ func StartLogServer(serverName string) {
 	cr.Start()
 
 	runtime.Goexit()
+}
+
+func StartLogServer(serverName string, hostName string, logServer Logger) {
+
+	config.Config.Load("conf.json")
+	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
+	logServer.CreateQueue(logServer.GetLoggerChannel())
+	go func() {
+		logServer.ParseLog(logServer.GetLoggerChannel(), logServer.GetLoggerQueue().Name)
+	}()
+
 }
