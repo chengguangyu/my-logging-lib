@@ -25,14 +25,14 @@ func PrintMsg(log LogMessage) {
 
 	var colorPrint *color.Color
 	switch {
-	case log.Level == "dmp":
+	case log.Level == "api":
 		colorPrint = color.New(color.FgHiCyan)
 		g := colorPrint.SprintfFunc()
-		buffer.WriteString(g("dmp"))
-	case log.Level == "dbg":
+		buffer.WriteString(g("api"))
+	case log.Level == "cer":
 		colorPrint = color.New(color.FgHiBlue)
 		g := colorPrint.SprintfFunc()
-		buffer.WriteString(g("dbg"))
+		buffer.WriteString(g("cer"))
 	case log.Level == "wrn":
 		colorPrint = color.New(color.FgYellow)
 		g := colorPrint.SprintfFunc()
@@ -152,8 +152,28 @@ func PrintMsg(log LogMessage) {
 		}
 	}
 
-	//printer <- fmt.Sprint(buffer.String())
 	logger.Println(buffer.String())
+}
+
+func GetRoutingKey(level string) string {
+	var routingKey string
+	switch {
+	case level == "wrn":
+		routingKey = "wrn"
+	case level == "err":
+		routingKey = "err"
+	case level == "api":
+		routingKey = "api"
+	case level == "cer":
+		routingKey = "cer"
+	case level == "logFail":
+		routingKey = "err.*"
+	case level == "logDone":
+		routingKey = "success.*"
+	default:
+		routingKey = "#"
+	}
+	return routingKey
 }
 
 func createPrinter() {
@@ -203,13 +223,25 @@ func WriteLog() {
 	runtime.Goexit()
 }
 
+func loadRoutingKeys() []string {
+	keys := []string{"#", "wrn", "err", "err.*", "success.*"}
+	return keys
+}
+
 func StartLogServer(serverName string, hostName string, logServer Logger) {
+
+	keys := loadRoutingKeys()
 
 	config.Config.Load("conf.json")
 	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
-	logServer.CreateQueue(logServer.GetLoggerChannel())
+	channel := logServer.GetLoggerChannel()
+	logServer.CreateTopicExchange(channel)
+	logServer.CreateQueue(channel)
+	queue := logServer.GetLoggerQueue()
+	logServer.BindQueuesToExchange(channel, queue.Name, keys)
 	go func() {
-		logServer.ParseLog(logServer.GetLoggerChannel(), logServer.GetLoggerQueue().Name)
+		//consumer
+		logServer.ParseLog(channel, queue.Name)
 	}()
 
 }

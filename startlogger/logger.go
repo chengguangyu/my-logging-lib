@@ -32,6 +32,8 @@ var logChannel *amqp.Channel
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
 	CreateQueue(ch *amqp.Channel) bool
+	CreateTopicExchange(ch *amqp.Channel) bool
+	BindQueuesToExchange(ch *amqp.Channel, qName string, keys []string)
 	GetLoggerChannel() *amqp.Channel
 	GetLoggerQueue() amqp.Queue
 	ShutDown()
@@ -106,17 +108,43 @@ func (logger *Logger) GetLoggerQueue() amqp.Queue {
 func (logger *Logger) CreateQueue(ch *amqp.Channel) bool {
 
 	q, err := ch.QueueDeclare(
-		"logs", // name
-		false,  // durable
-		false,  // delete when unused
-		false,  // exclusive
-		false,  // no-wait
-		nil,    // arguments
+		"",    // name
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 	fmt.Print("logger started")
 	logger.rabbitQueue = q
 	return true
+}
+
+func (logger *Logger) CreateTopicExchange(ch *amqp.Channel) bool {
+
+	err := ch.ExchangeDeclare(
+		"logs",  // name
+		"topic", // type
+		true,    // durable
+		false,   // auto-deleted
+		false,   // internal
+		false,   // no-wait
+		nil,     // arguments
+	)
+	failOnError(err, "Failed to declare a topic")
+	return true
+}
+func (logger *Logger) BindQueuesToExchange(ch *amqp.Channel, qName string, keys []string) {
+	for _, routingKey := range keys {
+		err := ch.QueueBind(
+			qName,
+			routingKey,
+			"logs",
+			false,
+			nil)
+		failOnError(err, "Failed to bind a queue")
+	}
 }
 
 func (logger *Logger) publishLog(text string, level string) {
@@ -130,13 +158,14 @@ func (logger *Logger) publishLog(text string, level string) {
 	}
 
 	err = logChannel.Publish(
-		"",     // exchange
-		"logs", // routing key
-		false,  // mandatory
-		false,  // immediate
+		"logs",               // exchange
+		GetRoutingKey(level), // routing key
+		false,                // mandatory
+		false,                // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(b),
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "text/plain",
+			Body:         []byte(b),
 		})
 	failOnError(err, "Failed to publish a message")
 }
@@ -163,6 +192,7 @@ func (logger *Logger) ParseLog(ch *amqp.Channel, qName string) {
 				fmt.Printf("Cannot parse the log message: %s\n", err)
 				return
 			}
+			msg.Ack(false)
 			PrintMsg(logMsg)
 		}
 	}()
@@ -178,13 +208,14 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 		fmt.Println("error:", err)
 	}
 	err = logChannel.Publish(
-		"",     // exchange
-		"logs", // routing key
-		false,  // mandatory
-		false,  // immediate
+		"logs",               // exchange
+		GetRoutingKey(level), // routing key
+		false,                // mandatory
+		false,                // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(b),
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "text/plain",
+			Body:         []byte(b),
 		})
 	failOnError(err, "Failed to publish a message")
 }
@@ -214,7 +245,7 @@ func handleError() string {
 
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("Stacktrace:\n"))
-	var i int = 2
+	i := 2
 	for i < 40 {
 		if function1, file1, line1, ok := runtime.Caller(i); ok {
 			buffer.WriteString(fmt.Sprintf("      at %s (%s:%d)\n", runtime.FuncForPC(function1).Name(), file1, line1))
