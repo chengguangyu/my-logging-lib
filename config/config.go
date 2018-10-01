@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -41,5 +40,5 @@ func (r *Configuration) Load(filename string) {
 		Config.LogPath = "/logs"
 	}
 
-	log.Printf("%+v", Config)
+	//log.Printf("%+v", Config)
 }

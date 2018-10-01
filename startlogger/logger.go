@@ -190,7 +190,6 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) bool {
 		go func(msgs <-chan amqp.Delivery) {
 			forever := make(chan bool)
 
-			fmt.Print("logger started")
 			for msg := range msgs {
 				logMsg := LogMessage{}
 				if err := json.Unmarshal(msg.Body, &logMsg); err != nil {

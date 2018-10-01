@@ -226,5 +226,5 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 		initial <- logServer.StartReceiver(channel)
 	}()
 	<-initial
-
+	fmt.Print("started")
 }
