@@ -179,14 +179,14 @@ func (logger *Logger) publishLog(text string, level string) {
 func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 
 	routingKeys = LoadRoutingKeys()
-	forever := make(chan bool)
 
 	for level, routingKey := range routingKeys {
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
+		go func(msgs <-chan amqp.Delivery) {
+			forever := make(chan bool)
 
-		go func() {
 			fmt.Print("logger started")
 			for msg := range msgs {
 				logMsg := LogMessage{}
@@ -197,10 +197,10 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 				msg.Ack(false)
 				PrintMsg(logMsg)
 			}
-		}()
+			<-forever
+		}(msgs)
 
 	}
-	<-forever
 
 }
 
