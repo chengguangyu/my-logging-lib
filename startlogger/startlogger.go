@@ -155,27 +155,6 @@ func PrintMsg(log LogMessage) {
 	logger.Println(buffer.String())
 }
 
-func GetRoutingKey(level string) string {
-	var routingKey string
-	switch {
-	case level == "wrn":
-		routingKey = "wrn"
-	case level == "err":
-		routingKey = "err"
-	case level == "api":
-		routingKey = "api"
-	case level == "cer":
-		routingKey = "cer"
-	case level == "logFail":
-		routingKey = "err.*"
-	case level == "logDone":
-		routingKey = "success.*"
-	default:
-		routingKey = "#"
-	}
-	return routingKey
-}
-
 func createPrinter() {
 	printer = make(chan string, 1)
 	go func() {
@@ -223,25 +202,28 @@ func WriteLog() {
 	runtime.Goexit()
 }
 
-func loadRoutingKeys() []string {
-	keys := []string{"#", "wrn", "err", "err.*", "success.*"}
-	return keys
+func LoadRoutingKeys() map[string]string {
+	routingKeys := map[string]string{"err": "err.*", "wrn": "wrn.*", "fyi": "fyi.#", "panic": "err.*.runtime", "good": "success.*", "dbg": "dbg.*"}
+	return routingKeys
+}
+
+func GetRoutingKey(level string, keyMap map[string]string) string {
+	routingKey, ok := keyMap[level]
+	if !ok {
+		routingKey = "#"
+	}
+	return routingKey
 }
 
 func StartLogServer(serverName string, hostName string, logServer Logger) {
-
-	keys := loadRoutingKeys()
 
 	config.Config.Load("conf.json")
 	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
 	channel := logServer.GetLoggerChannel()
 	logServer.CreateTopicExchange(channel)
-	logServer.CreateQueue(channel)
-	queue := logServer.GetLoggerQueue()
-	logServer.BindQueuesToExchange(channel, queue.Name, keys)
 	go func() {
 		//consumer
-		logServer.ParseLog(channel, queue.Name)
+		logServer.ParseLog(channel)
 	}()
 
 }

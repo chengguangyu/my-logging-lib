@@ -17,6 +17,8 @@ const ERROR = "err"
 const FYI = "fyi"
 const PANIC = "panic"
 
+var routingKeys map[string]string
+
 type LogMessage struct {
 	Id    string
 	Host  string
@@ -31,13 +33,10 @@ var logChannel *amqp.Channel
 
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
-	CreateQueue(ch *amqp.Channel) bool
 	CreateTopicExchange(ch *amqp.Channel) bool
-	BindQueuesToExchange(ch *amqp.Channel, qName string, keys []string)
 	GetLoggerChannel() *amqp.Channel
-	GetLoggerQueue() amqp.Queue
 	ShutDown()
-	ParseLog(ch *amqp.Channel, qName string)
+	ParseLog(ch *amqp.Channel)
 	PrintLocally(printLocal bool)
 	Warn(v ...interface{})
 	Warnf(format string, v ...interface{})
@@ -68,7 +67,6 @@ type Logger struct {
 	LoggerInterface
 	rabbitCh     *amqp.Channel
 	rabbitConn   *amqp.Connection
-	rabbitQueue  amqp.Queue
 	printLocally bool
 }
 
@@ -101,26 +99,6 @@ func (logger *Logger) GetLoggerChannel() *amqp.Channel {
 	return logger.rabbitCh
 }
 
-func (logger *Logger) GetLoggerQueue() amqp.Queue {
-	return logger.rabbitQueue
-}
-
-func (logger *Logger) CreateQueue(ch *amqp.Channel) bool {
-
-	q, err := ch.QueueDeclare(
-		"",    // name
-		true,  // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
-	fmt.Print("logger started")
-	logger.rabbitQueue = q
-	return true
-}
-
 func (logger *Logger) CreateTopicExchange(ch *amqp.Channel) bool {
 
 	err := ch.ExchangeDeclare(
@@ -135,17 +113,6 @@ func (logger *Logger) CreateTopicExchange(ch *amqp.Channel) bool {
 	failOnError(err, "Failed to declare a topic")
 	return true
 }
-func (logger *Logger) BindQueuesToExchange(ch *amqp.Channel, qName string, keys []string) {
-	for _, routingKey := range keys {
-		err := ch.QueueBind(
-			qName,
-			routingKey,
-			"logs",
-			false,
-			nil)
-		failOnError(err, "Failed to bind a queue")
-	}
-}
 
 func (logger *Logger) publishLog(text string, level string) {
 	now := time.Now()
@@ -158,10 +125,10 @@ func (logger *Logger) publishLog(text string, level string) {
 	}
 
 	err = logChannel.Publish(
-		"logs",               // exchange
-		GetRoutingKey(level), // routing key
-		false,                // mandatory
-		false,                // immediate
+		"logs",                            // exchange
+		GetRoutingKey(level, routingKeys), // routing key
+		false,                             // mandatory
+		false,                             // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
@@ -170,10 +137,31 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
-func (logger *Logger) ParseLog(ch *amqp.Channel, qName string) {
+func (logger *Logger) ParseLog(ch *amqp.Channel) {
+	q, err := ch.QueueDeclare(
+		"",    // name
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	routingKeys = LoadRoutingKeys()
+
+	for _, routingKey := range routingKeys {
+		err := ch.QueueBind(
+			q.Name,
+			routingKey,
+			"logs",
+			false,
+			nil)
+		failOnError(err, "Failed to bind a queue")
+	}
 
 	msgs, err := ch.Consume(
-		qName,
+		q.Name,
 		"",
 		true,
 		false,
@@ -186,6 +174,7 @@ func (logger *Logger) ParseLog(ch *amqp.Channel, qName string) {
 	forever := make(chan bool)
 
 	go func() {
+		fmt.Print("logger started")
 		for msg := range msgs {
 			logMsg := LogMessage{}
 			if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
@@ -208,10 +197,10 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 		fmt.Println("error:", err)
 	}
 	err = logChannel.Publish(
-		"logs",               // exchange
-		GetRoutingKey(level), // routing key
-		false,                // mandatory
-		false,                // immediate
+		"logs",                            // exchange
+		GetRoutingKey(level, routingKeys), // routing key
+		false,                             // mandatory
+		false,                             // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
