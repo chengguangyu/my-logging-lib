@@ -33,10 +33,13 @@ var logChannel *amqp.Channel
 
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
+	CreateQueue(ch *amqp.Channel) amqp.Queue
 	CreateTopicExchange(ch *amqp.Channel) bool
+	CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery
+	BindQueueToExchange(ch *amqp.Channel, q amqp.Queue, routingKey string)
 	GetLoggerChannel() *amqp.Channel
 	ShutDown()
-	ParseLog(ch *amqp.Channel)
+	StartReceiver(ch *amqp.Channel)
 	PrintLocally(printLocal bool)
 	Warn(v ...interface{})
 	Warnf(format string, v ...interface{})
@@ -113,6 +116,42 @@ func (logger *Logger) CreateTopicExchange(ch *amqp.Channel) bool {
 	failOnError(err, "Failed to declare a topic")
 	return true
 }
+func (logger *Logger) CreateQueue(ch *amqp.Channel, qName string) amqp.Queue {
+	q, err := ch.QueueDeclare(
+		qName, // name
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	return q
+}
+
+func (logger *Logger) BindQueueToExchange(ch *amqp.Channel, q amqp.Queue, routingKey string) {
+	err := ch.QueueBind(
+		q.Name,
+		routingKey,
+		"logs",
+		false,
+		nil)
+	failOnError(err, "Failed to bind a queue")
+}
+
+func (logger *Logger) CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery {
+	msgs, err := ch.Consume(
+		q.Name,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	failOnError(err, "Failed to register a consumer")
+	return msgs
+}
 
 func (logger *Logger) publishLog(text string, level string) {
 	now := time.Now()
@@ -137,55 +176,32 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
-func (logger *Logger) ParseLog(ch *amqp.Channel) {
-	q, err := ch.QueueDeclare(
-		"",    // name
-		true,  // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
+func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 
 	routingKeys = LoadRoutingKeys()
-
-	for _, routingKey := range routingKeys {
-		err := ch.QueueBind(
-			q.Name,
-			routingKey,
-			"logs",
-			false,
-			nil)
-		failOnError(err, "Failed to bind a queue")
-	}
-
-	msgs, err := ch.Consume(
-		q.Name,
-		"",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to register a consumer")
-
 	forever := make(chan bool)
 
-	go func() {
-		fmt.Print("logger started")
-		for msg := range msgs {
-			logMsg := LogMessage{}
-			if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
-				fmt.Printf("Cannot parse the log message: %s\n", err)
-				return
+	for level, routingKey := range routingKeys {
+		q := logger.CreateQueue(ch, level)
+		logger.BindQueueToExchange(ch, q, routingKey)
+		msgs := logger.CreateConsumer(ch, q)
+
+		go func() {
+			fmt.Print("logger started")
+			for msg := range msgs {
+				logMsg := LogMessage{}
+				if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
+					fmt.Printf("Cannot parse the log message: %s\n", err)
+					return
+				}
+				msg.Ack(false)
+				PrintMsg(logMsg)
 			}
-			msg.Ack(false)
-			PrintMsg(logMsg)
-		}
-	}()
+		}()
+
+	}
 	<-forever
+
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {

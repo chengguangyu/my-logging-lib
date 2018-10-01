@@ -222,8 +222,7 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	channel := logServer.GetLoggerChannel()
 	logServer.CreateTopicExchange(channel)
 	go func() {
-		//consumer
-		logServer.ParseLog(channel)
+		logServer.StartReceiver(channel)
 	}()
 
 }
