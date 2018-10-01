@@ -222,10 +222,11 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	channel := logServer.GetLoggerChannel()
 	logServer.CreateTopicExchange(channel)
 	initial := make(chan bool)
-	go func() {
-		logServer.StartReceiver(channel)
-		close(initial)
-	}()
+	deliveries := logServer.StartReceiver(channel)
+	close(initial)
 	<-initial
+	go func() {
+		logger.ConsumeMsgs(deliveries)
+	}()
 	fmt.Print("started")
 }
