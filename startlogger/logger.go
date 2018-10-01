@@ -7,7 +7,6 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"runtime"
-	"sync"
 	"time"
 )
 
@@ -180,13 +179,11 @@ func (logger *Logger) publishLog(text string, level string) {
 func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 
 	routingKeys = LoadRoutingKeys()
-	var wg sync.WaitGroup
 
 	for level, routingKey := range routingKeys {
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
-		wg.Add(1)
 		go func(msgs <-chan amqp.Delivery) {
 			forever := make(chan bool)
 
@@ -202,7 +199,7 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 			<-forever
 		}(msgs)
 	}
-	wg.Wait()
+
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
