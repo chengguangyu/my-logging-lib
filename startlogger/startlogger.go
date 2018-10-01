@@ -223,7 +223,8 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	logServer.CreateTopicExchange(channel)
 	initial := make(chan bool)
 	go func() {
-		initial <- logServer.StartReceiver(channel)
+		logServer.StartReceiver(channel)
+		close(initial)
 	}()
 	<-initial
 	fmt.Print("started")

@@ -177,7 +177,7 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
-func (logger *Logger) StartReceiver(ch *amqp.Channel) bool {
+func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 
 	routingKeys = LoadRoutingKeys()
 	var wg sync.WaitGroup
@@ -203,7 +203,6 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) bool {
 		}(msgs)
 	}
 	wg.Wait()
-	return true
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
