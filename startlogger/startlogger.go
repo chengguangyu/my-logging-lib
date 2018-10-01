@@ -221,8 +221,10 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
 	channel := logServer.GetLoggerChannel()
 	logServer.CreateTopicExchange(channel)
+	initial := make(chan bool)
 	go func() {
-		logServer.StartReceiver(channel)
+		initial <- logServer.StartReceiver(channel)
 	}()
+	<-initial
 
 }
