@@ -190,7 +190,7 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) []amqp.Delivery {
 	}
 	return delivers
 }
-func ConsumeMsgs(msgs []amqp.Delivery) {
+func (logger *Logger) ConsumeMsgs(msgs []amqp.Delivery) {
 
 	forever := make(chan bool)
 
