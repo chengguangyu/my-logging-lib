@@ -181,12 +181,11 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 	routingKeys = LoadRoutingKeys()
 
 	for level, routingKey := range routingKeys {
-
-		go func() {
-			forever := make(chan bool)
-			q := logger.CreateQueue(ch, level)
-			logger.BindQueueToExchange(ch, q, routingKey)
-			msgs := logger.CreateConsumer(ch, q)
+		q := logger.CreateQueue(ch, level)
+		logger.BindQueueToExchange(ch, q, routingKey)
+		msgs := logger.CreateConsumer(ch, q)
+		forever := make(chan bool)
+		go func(msgs <-chan amqp.Delivery) {
 
 			for msg := range msgs {
 				logMsg := LogMessage{}
@@ -197,9 +196,9 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) {
 				msg.Ack(false)
 				PrintMsg(logMsg)
 			}
-			fmt.Print("shit")
-			<-forever
-		}()
+
+		}(msgs)
+		<-forever
 	}
 
 }
