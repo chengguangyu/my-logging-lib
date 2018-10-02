@@ -172,18 +172,19 @@ func (logger *Logger) publishLog(text string, level string) {
 		fmt.Println("error:", err)
 	}
 	key := GetRoutingKey(level, routingKeys)
-	fmt.Print(key)
+	ch := logger.GetPublisherCh()
 
-	err = logger.rabbitCh.Publish(
-		"logs",                            // exchange
-		GetRoutingKey(level, routingKeys), // routing key
-		false,                             // mandatory
-		false,                             // immediate
+	err = ch.Publish(
+		"logs", // exchange
+		key,    // routing key
+		false,  // mandatory
+		false,  // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
 			Body:         []byte(b),
 		})
+
 	failOnError(err, "Failed to publish a message")
 }
 
@@ -245,11 +246,13 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	err = logger.rabbitCh.Publish(
-		"logs",                            // exchange
-		GetRoutingKey(level, routingKeys), // routing key
-		false,                             // mandatory
-		false,                             // immediate
+	ch := logger.GetPublisherCh()
+	key := GetRoutingKey(level, routingKeys)
+	err = ch.Publish(
+		"logs", // exchange
+		key,    // routing key
+		false,  // mandatory
+		false,  // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
