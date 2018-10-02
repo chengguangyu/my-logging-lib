@@ -189,6 +189,7 @@ func (logger *Logger) publishLog(text string, level string) {
 		})
 
 	failOnError(err, "Failed to publish a message")
+	fmt.Print("publish" + key)
 }
 
 func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
@@ -202,7 +203,6 @@ func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
-		fmt.Print(msgs)
 		delivers = append(delivers, msgs)
 	}
 	return delivers
@@ -230,7 +230,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 				PrintMsg(logMsg)
 
 			}
-			log.Println("waiting for logs")
+			fmt.Println("waiting for logs")
 		}(msgs)
 
 	}

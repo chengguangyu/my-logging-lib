@@ -224,6 +224,5 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	deliveries := logServer.StartReceiver()
 	close(initial)
 	<-initial
-	fmt.Print("started")
 	go logServer.ConsumeMsgs(deliveries)
 }
