@@ -246,7 +246,6 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 
 	}
 	for i := 0; i < 50; i++ {
-		time.Sleep(2 * time.Second)
 		forever <- i
 	}
 	close(forever)
