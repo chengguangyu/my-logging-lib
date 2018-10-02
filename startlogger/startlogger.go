@@ -210,7 +210,7 @@ func LoadRoutingKeys() map[string]string {
 func GetRoutingKey(level string, keyMap map[string]string) string {
 	routingKey, ok := keyMap[level]
 	if !ok {
-		routingKey = "#"
+		routingKey = "fyi.#"
 	}
 	return routingKey
 }

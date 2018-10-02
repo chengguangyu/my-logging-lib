@@ -163,6 +163,8 @@ func (logger *Logger) publishLog(text string, level string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
+	key := GetRoutingKey(level, routingKeys)
+	fmt.Print(key)
 
 	err = logChannel.Publish(
 		"logs",                            // exchange
@@ -212,7 +214,6 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 		}(msgs)
 
 	}
-
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
