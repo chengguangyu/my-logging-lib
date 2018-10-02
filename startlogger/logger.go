@@ -32,10 +32,12 @@ var server string
 var host string
 var publisherCh *amqp.Channel
 var globalConn *amqp.Connection
+var URL string
 
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
 	CreateChannel(conn *amqp.Connection) *amqp.Channel
+	CreateConnection() *amqp.Connection
 	CreateQueue(ch *amqp.Channel) amqp.Queue
 	CreateTopicExchange(ch *amqp.Channel) bool
 	CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery
@@ -94,6 +96,7 @@ func (logger *Logger) Connect(RabbitMQUrl string, serverName string, hostName st
 	host = hostName
 	logger.rabbitCh = ch
 	publisherCh = ch
+	URL = RabbitMQUrl
 }
 func (logger *Logger) GetPublisherCh() *amqp.Channel {
 	return logger.rabbitCh
@@ -107,6 +110,12 @@ func (logger *Logger) CreateChannel(conn *amqp.Connection) *amqp.Channel {
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 	return ch
+}
+
+func (logger *Logger) CreateConnection() *amqp.Connection {
+	conn, err := amqp.Dial(URL)
+	failOnError(err, "Failed to connect to RabbitMQ")
+	return conn
 }
 
 func (logger *Logger) ShutDown() {
@@ -196,7 +205,8 @@ func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 
 	RoutingKeys = LoadRoutingKeys()
 	delivers := make([]<-chan amqp.Delivery, 1)
-	conn := logger.GetGlobalConn()
+	conn := logger.CreateConnection()
+	fmt.Print(conn)
 	for level, routingKey := range RoutingKeys {
 
 		ch := logger.CreateChannel(conn)
@@ -211,6 +221,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 	forever := make(chan int, 50)
 	var wg sync.WaitGroup
 	wg.Add(len(delivers))
+	fmt.Print(len(delivers))
 	for _, msgs := range delivers {
 
 		go func(msgs <-chan amqp.Delivery) {
