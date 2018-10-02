@@ -245,6 +245,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 	}
 	for i := 0; i < 50; i++ {
 		forever <- i
+		fmt.Print(i)
 	}
 	close(forever)
 	wg.Wait()
