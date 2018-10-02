@@ -7,7 +7,6 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"runtime"
-	"sync"
 	"time"
 )
 
@@ -217,19 +216,13 @@ func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 	return delivers
 }
 func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
-	forever := make(chan int, 50)
-	var wg sync.WaitGroup
-	wg.Add(len(delivers))
-	fmt.Print(len(delivers))
+	// how to make multiple go routine keep running and tell continue the main thread
+
 	for _, msgs := range delivers {
 
 		go func(msgs <-chan amqp.Delivery) {
+			forever := make(chan int)
 			for msg := range msgs {
-				_, ok := <-forever
-				if !ok {
-					wg.Done()
-					return
-				}
 				logMsg := LogMessage{}
 
 				if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
@@ -240,15 +233,11 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 				PrintMsg(logMsg)
 
 			}
-		}(msgs)
+			fmt.Print("keepIt")
+			<-forever
+		}(msgs) // make it always running
 
 	}
-	for i := 0; i < 50; i++ {
-		forever <- i
-		fmt.Print(i)
-	}
-	close(forever)
-	wg.Wait()
 	fmt.Print("done")
 }
 
