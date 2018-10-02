@@ -7,6 +7,7 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -194,11 +195,18 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) []<-chan amqp.Delivery {
 	return delivers
 }
 func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
-	forever := make(chan struct{}, 10)
+	forever := make(chan int, 50)
+	var wg sync.WaitGroup
+	wg.Add(len(delivers))
 	for _, msgs := range delivers {
-		forever <- struct{}{}
+
 		go func(msgs <-chan amqp.Delivery) {
 			for msg := range msgs {
+				_, ok := <-forever
+				if !ok {
+					wg.Done()
+					return
+				}
 				logMsg := LogMessage{}
 
 				if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
@@ -210,10 +218,14 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 
 			}
 			log.Println("waiting for logs")
-			<-forever
 		}(msgs)
 
 	}
+	for i := 0; i < 50; i++ {
+		forever <- i
+	}
+	close(forever)
+	wg.Wait()
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
