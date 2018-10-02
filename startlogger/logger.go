@@ -186,7 +186,9 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) []amqp.Delivery {
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
-		delivers = append(delivers, <-msgs)
+		deliver := <-msgs
+		fmt.Print(deliver)
+		delivers = append(delivers, deliver)
 	}
 	return delivers
 }
