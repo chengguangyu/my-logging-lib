@@ -38,6 +38,8 @@ type LoggerInterface interface {
 	CreateTopicExchange(ch *amqp.Channel) bool
 	CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery
 	BindQueueToExchange(ch *amqp.Channel, q amqp.Queue, routingKey string)
+	GetPublisherCh() *amqp.Channel
+	GetGlobalConn() *amqp.Connection
 	ShutDown()
 	StartReceiver() []amqp.Delivery
 	ConsumeMsgs(msgs []amqp.Delivery)
@@ -88,6 +90,13 @@ func (logger *Logger) Connect(RabbitMQUrl string, serverName string, hostName st
 	server = serverName
 	host = hostName
 	logger.rabbitCh = ch
+}
+func (logger *Logger) GetPublisherCh() *amqp.Channel {
+	return logger.rabbitCh
+}
+
+func (logger *Logger) GetGlobalConn() *amqp.Connection {
+	return logger.rabbitConn
 }
 
 func (logger *Logger) CreateChannel(conn *amqp.Connection) *amqp.Channel {
@@ -182,9 +191,10 @@ func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 
 	routingKeys = LoadRoutingKeys()
 	delivers := make([]<-chan amqp.Delivery, 1)
-
+	conn := logger.GetGlobalConn()
 	for level, routingKey := range routingKeys {
-		ch := logger.CreateChannel(logger.rabbitConn)
+
+		ch := logger.CreateChannel(conn)
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)

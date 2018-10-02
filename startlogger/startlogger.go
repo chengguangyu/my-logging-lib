@@ -219,7 +219,7 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 
 	config.Config.Load("conf.json")
 	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
-	logServer.CreateTopicExchange(logServer.rabbitCh)
+	logServer.CreateTopicExchange(logServer.GetPublisherCh())
 	initial := make(chan bool)
 	deliveries := logServer.StartReceiver()
 	close(initial)
