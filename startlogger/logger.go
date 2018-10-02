@@ -30,15 +30,14 @@ type LogMessage struct {
 
 var server string
 var host string
-var logChannel *amqp.Channel
 
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
+	CreateChannel(conn *amqp.Connection) *amqp.Channel
 	CreateQueue(ch *amqp.Channel) amqp.Queue
 	CreateTopicExchange(ch *amqp.Channel) bool
 	CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery
 	BindQueueToExchange(ch *amqp.Channel, q amqp.Queue, routingKey string)
-	GetLoggerChannel() *amqp.Channel
 	ShutDown()
 	StartReceiver(ch *amqp.Channel) []amqp.Delivery
 	ConsumeMsgs(msgs []amqp.Delivery)
@@ -70,8 +69,8 @@ func failOnError(err error, msg string) {
 
 type Logger struct {
 	LoggerInterface
-	rabbitCh     *amqp.Channel
 	rabbitConn   *amqp.Connection
+	rabbitCh     *amqp.Channel
 	printLocally bool
 }
 
@@ -84,24 +83,23 @@ func (logger *Logger) Connect(RabbitMQUrl string, serverName string, hostName st
 
 	failOnError(err, "Failed to connect to RabbitMQ")
 	logger.rabbitConn = conn
-
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
-
-	logger.rabbitCh = ch
-	logChannel = ch
 	server = serverName
 	host = hostName
+	logger.rabbitCh = ch
+}
+
+func (logger *Logger) CreateChannel(conn *amqp.Connection) *amqp.Channel {
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	return ch
 }
 
 func (logger *Logger) ShutDown() {
 	logger.rabbitConn.Close()
 	logger.rabbitCh.Close()
 	fmt.Println("logger closed")
-}
-
-func (logger *Logger) GetLoggerChannel() *amqp.Channel {
-	return logger.rabbitCh
 }
 
 func (logger *Logger) CreateTopicExchange(ch *amqp.Channel) bool {
@@ -167,7 +165,7 @@ func (logger *Logger) publishLog(text string, level string) {
 	key := GetRoutingKey(level, routingKeys)
 	fmt.Print(key)
 
-	err = logChannel.Publish(
+	err = logger.rabbitCh.Publish(
 		"logs",                            // exchange
 		GetRoutingKey(level, routingKeys), // routing key
 		false,                             // mandatory
@@ -180,12 +178,13 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
-func (logger *Logger) StartReceiver(ch *amqp.Channel) []<-chan amqp.Delivery {
+func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 
 	routingKeys = LoadRoutingKeys()
 	delivers := make([]<-chan amqp.Delivery, 1)
 
 	for level, routingKey := range routingKeys {
+		ch := logger.CreateChannel(logger.rabbitConn)
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
@@ -236,7 +235,7 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	err = logChannel.Publish(
+	err = logger.rabbitCh.Publish(
 		"logs",                            // exchange
 		GetRoutingKey(level, routingKeys), // routing key
 		false,                             // mandatory
