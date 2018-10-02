@@ -203,14 +203,14 @@ func WriteLog() {
 }
 
 func LoadRoutingKeys() map[string]string {
-	routingKeys := map[string]string{"err": "err.*", "wrn": "wrn.*", "fyi": "fyi.#", "panic": "err.*.runtime", "good": "success.*", "dbg": "dbg.*"}
+	routingKeys := map[string]string{"err": "err", "wrn": "wrn", "fyi": "fyi", "panic": "err", "good": "success", "dbg": "dbg"}
 	return routingKeys
 }
 
 func GetRoutingKey(level string, keyMap map[string]string) string {
 	routingKey, ok := keyMap[level]
 	if !ok {
-		routingKey = "fyi.#"
+		routingKey = "#"
 	}
 	return routingKey
 }

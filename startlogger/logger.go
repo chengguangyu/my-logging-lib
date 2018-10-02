@@ -189,7 +189,7 @@ func (logger *Logger) publishLog(text string, level string) {
 		})
 
 	failOnError(err, "Failed to publish a message")
-	fmt.Print("publish" + key)
+	fmt.Print("shit" + key)
 }
 
 func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
@@ -235,6 +235,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 
 	}
 	for i := 0; i < 50; i++ {
+		time.Sleep(2 * time.Second)
 		forever <- i
 	}
 	close(forever)
