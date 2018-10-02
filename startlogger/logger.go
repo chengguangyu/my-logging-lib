@@ -18,7 +18,7 @@ const ERROR = "err"
 const FYI = "fyi"
 const PANIC = "panic"
 
-var routingKeys map[string]string
+var RoutingKeys map[string]string
 
 type LogMessage struct {
 	Id    string
@@ -30,6 +30,8 @@ type LogMessage struct {
 
 var server string
 var host string
+var publisherCh *amqp.Channel
+var globalConn *amqp.Connection
 
 type LoggerInterface interface {
 	Connect(RabbitMQUrl string, serverName string, hostName string, fatal bool)
@@ -85,11 +87,13 @@ func (logger *Logger) Connect(RabbitMQUrl string, serverName string, hostName st
 
 	failOnError(err, "Failed to connect to RabbitMQ")
 	logger.rabbitConn = conn
+	globalConn = conn
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 	server = serverName
 	host = hostName
 	logger.rabbitCh = ch
+	publisherCh = ch
 }
 func (logger *Logger) GetPublisherCh() *amqp.Channel {
 	return logger.rabbitCh
@@ -171,10 +175,9 @@ func (logger *Logger) publishLog(text string, level string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	key := GetRoutingKey(level, routingKeys)
-	ch := logger.GetPublisherCh()
+	key := GetRoutingKey(level, RoutingKeys)
 
-	err = ch.Publish(
+	err = publisherCh.Publish(
 		"logs", // exchange
 		key,    // routing key
 		false,  // mandatory
@@ -190,10 +193,10 @@ func (logger *Logger) publishLog(text string, level string) {
 
 func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 
-	routingKeys = LoadRoutingKeys()
+	RoutingKeys = LoadRoutingKeys()
 	delivers := make([]<-chan amqp.Delivery, 1)
 	conn := logger.GetGlobalConn()
-	for level, routingKey := range routingKeys {
+	for level, routingKey := range RoutingKeys {
 
 		ch := logger.CreateChannel(conn)
 		q := logger.CreateQueue(ch, level)
@@ -246,9 +249,8 @@ func (logger *Logger) publishLogId(text string, level string, id string) {
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	ch := logger.GetPublisherCh()
-	key := GetRoutingKey(level, routingKeys)
-	err = ch.Publish(
+	key := GetRoutingKey(level, RoutingKeys)
+	err = publisherCh.Publish(
 		"logs", // exchange
 		key,    // routing key
 		false,  // mandatory
