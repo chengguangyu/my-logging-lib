@@ -192,19 +192,22 @@ func (logger *Logger) StartReceiver(ch *amqp.Channel) []amqp.Delivery {
 }
 func (logger *Logger) ConsumeMsgs(msgs []amqp.Delivery) {
 
-	forever := make(chan bool)
+	go func() {
+		forever := make(chan bool)
 
-	for _, msg := range msgs {
-		logMsg := LogMessage{}
+		for _, msg := range msgs {
+			logMsg := LogMessage{}
 
-		if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
-			fmt.Printf("Cannot parse the log message: %s\n", err)
-			return
+			if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
+				fmt.Printf("Cannot parse the log message: %s\n", err)
+				return
+			}
+			msg.Ack(false)
+			PrintMsg(logMsg)
 		}
-		msg.Ack(false)
-		PrintMsg(logMsg)
-	}
-	<-forever
+		<-forever
+	}()
+
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
