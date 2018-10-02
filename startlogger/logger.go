@@ -195,7 +195,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 	forever := make(chan bool)
 	for _, msgs := range delivers {
 
-		go func() {
+		go func(msgs <-chan amqp.Delivery) {
 			for msg := range msgs {
 				logMsg := LogMessage{}
 
@@ -206,7 +206,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 				msg.Ack(false)
 				PrintMsg(logMsg)
 			}
-		}()
+		}(msgs)
 		log.Println("waiting for logs")
 
 	}
