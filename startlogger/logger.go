@@ -207,9 +207,9 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 				PrintMsg(logMsg)
 
 			}
+			log.Println("waiting for logs")
 			<-forever
 		}(msgs)
-		log.Println("waiting for logs")
 
 	}
 
