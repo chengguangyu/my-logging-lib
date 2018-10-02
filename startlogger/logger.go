@@ -206,7 +206,6 @@ func (logger *Logger) StartReceiver() []<-chan amqp.Delivery {
 	RoutingKeys = LoadRoutingKeys()
 	delivers := make([]<-chan amqp.Delivery, 1)
 	conn := logger.CreateConnection()
-	fmt.Print(conn)
 	for level, routingKey := range RoutingKeys {
 
 		ch := logger.CreateChannel(conn)
@@ -241,7 +240,6 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 				PrintMsg(logMsg)
 
 			}
-			fmt.Println("waiting for logs")
 		}(msgs)
 
 	}
@@ -250,6 +248,7 @@ func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 	}
 	close(forever)
 	wg.Wait()
+	fmt.Print("done")
 }
 
 func (logger *Logger) publishLogId(text string, level string, id string) {
