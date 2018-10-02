@@ -177,39 +177,39 @@ func (logger *Logger) publishLog(text string, level string) {
 	failOnError(err, "Failed to publish a message")
 }
 
-func (logger *Logger) StartReceiver(ch *amqp.Channel) []amqp.Delivery {
+func (logger *Logger) StartReceiver(ch *amqp.Channel) []<-chan amqp.Delivery {
 
 	routingKeys = LoadRoutingKeys()
-	delivers := make([]amqp.Delivery, 1)
+	delivers := make([]<-chan amqp.Delivery, 1)
 
 	for level, routingKey := range routingKeys {
 		q := logger.CreateQueue(ch, level)
 		logger.BindQueueToExchange(ch, q, routingKey)
 		msgs := logger.CreateConsumer(ch, q)
 		fmt.Print(msgs)
-		deliver := <-msgs
-		fmt.Print(deliver)
-		delivers = append(delivers, deliver)
+		delivers = append(delivers, msgs)
 	}
 	return delivers
 }
-func (logger *Logger) ConsumeMsgs(msgs []amqp.Delivery) {
+func (logger *Logger) ConsumeMsgs(delivers []<-chan amqp.Delivery) {
 
-	go func() {
+	for _, msgs := range delivers {
 		forever := make(chan bool)
+		go func() {
+			for msg := range msgs {
+				logMsg := LogMessage{}
 
-		for _, msg := range msgs {
-			logMsg := LogMessage{}
-
-			if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
-				fmt.Printf("Cannot parse the log message: %s\n", err)
-				return
+				if err := json.Unmarshal(msg.Body, &logMsg); err != nil {
+					fmt.Printf("Cannot parse the log message: %s\n", err)
+					return
+				}
+				msg.Ack(false)
+				PrintMsg(logMsg)
 			}
-			msg.Ack(false)
-			PrintMsg(logMsg)
-		}
+		}()
+		log.Println("waiting for logs")
 		<-forever
-	}()
+	}
 
 }
 
