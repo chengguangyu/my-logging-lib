@@ -39,7 +39,7 @@ type LoggerInterface interface {
 	CreateConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery
 	BindQueueToExchange(ch *amqp.Channel, q amqp.Queue, routingKey string)
 	ShutDown()
-	StartReceiver(ch *amqp.Channel) []amqp.Delivery
+	StartReceiver() []amqp.Delivery
 	ConsumeMsgs(msgs []amqp.Delivery)
 	PrintLocally(printLocal bool)
 	Warn(v ...interface{})

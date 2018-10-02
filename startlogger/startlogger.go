@@ -218,10 +218,10 @@ func GetRoutingKey(level string, keyMap map[string]string) string {
 func StartLogServer(serverName string, hostName string, logServer Logger) {
 
 	config.Config.Load("conf.json")
-	channel := logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
-	logServer.CreateTopicExchange(channel)
+	logServer.Connect(config.Config.RabbitMQUrl, serverName, hostName, true)
+	logServer.CreateTopicExchange(logServer.rabbitCh)
 	initial := make(chan bool)
-	deliveries := logServer.StartReceiver(channel)
+	deliveries := logServer.StartReceiver()
 	close(initial)
 	<-initial
 	fmt.Print("started")
