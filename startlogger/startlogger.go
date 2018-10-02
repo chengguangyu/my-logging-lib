@@ -222,7 +222,8 @@ func StartLogServer(serverName string, hostName string, logServer Logger) {
 	logServer.CreateTopicExchange(logServer.GetPublisherCh())
 	initial := make(chan bool)
 	deliveries := logServer.StartReceiver()
+	logServer.ConsumeMsgs(deliveries)
 	close(initial)
 	<-initial
-	go logServer.ConsumeMsgs(deliveries)
+	fmt.Println("consumer started!")
 }
