@@ -1,2 +1,2 @@
-# comodo-logging-lib
+logging-lib
 log lib for go services
